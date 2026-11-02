@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <title>Yardımcı Şefim - 3D Mutfak Oyunu Simülasyonu</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
+
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #111; margin: 0; overflow: hidden; color: white; }
+        #gameCanvas { width: 100vw; height: 100vh; display: block; }
+
+        #crosshair {
+            position: absolute; top: 50%; left: 50%;
+            width: 8px; height: 8px; background: white;
+            border-radius: 50%; transform: translate(-50%, -50%);
+            pointer-events: none; border: 2px solid rgba(0,0,0,0.5); z-index: 10;
+        }
+
+        #instructions {
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(0, 0, 0, 0.75); display: flex; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 20; cursor: pointer;
+        }
+        #instructions h1 { color: #d35400; margin-bottom: 10px; font-size: 36px; text-align: center; }
+        #instructions p { font-size: 18px; color: #eee; margin: 5px 0; text-align: center; }
+        .start-btn { background: #d35400; color: white; padding: 12px 25px; border-radius: 8px; font-weight: bold; border: none; font-size: 18px; margin-top: 15px; cursor: pointer; }
+
+        .modal {
+            display: none; position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%); background: white; color: #333;
+            width: 90%; max-width: 450px; padding: 20px; border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5); z-index: 30;
+        }
+        .modal h2 { margin-top: 0; color: #d35400; }
+        .close-btn { background: #e74c3c; color: white; border: none; padding: 6px 12px; border-radius: 4px; float: right; cursor: pointer; font-weight: bold; }
+        .btn { background: #d35400; color: white; border: none; padding: 10px 15px; font-size: 14px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: bold; margin-top: 8px; }
+        ul { list-style: none; padding: 0; max-height: 150px; overflow-y: auto; }
+        li { background: #f4f4f4; border: 1px solid #ddd; padding: 8px; margin-top: 5px; border-radius: 5px; display: flex; justify-content: space-between; align-items: center; color: #333; }
+        input, select { width: 100%; padding: 8px; margin-top: 6px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
+        
+        #uiBar {
+            position: absolute; top: 15px; left: 15px; z-index: 15;
+            background: rgba(0,0,0,0.7); padding: 12px 18px; border-radius: 8px;
+            font-size: 14px; border: 1px solid rgba(255,255,255,0.2); line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+
+<div id="crosshair"></div>
+
+<div id="instructions">
+    <h1>🍳 Yardımcı Şefim 3D Mutfak</h1>
+    <p>🚶 <b>W, A, S, D</b> ile gezinebilir, fare ile etrafa bakabilirsin[cite: 4].</p>
+    <p>🖱️ **Sol Tık:** Envanter açar.</p>
+    <p>🖱️ **Sağ Tık:** Eşyayı seçer/tutar, tekrar sağ tık bırakır.</p>
+    <p>⌨️ **R / F Tuşları:** Tutulan eşyayı yukarı kaldırır / aşağı indirir.</p>
+    <button class="start-btn">Oyna / Mutfak Oyunu Başlat</button>
+</div>
+
+<div id="uiBar">
+    📌 <b>Kontroller:</b><br>
+    • Sol Tık: Envanteri Aç<br>
+    • <b>Sağ Tık:</b> Eşyayı Tut / Bırak (Taşı)<br>
+    • <b>R / F:</b> Havaya Kaldır / İndir
+</div>
+
+<!-- MODALLAR -->
+<div id="modalBuzdolabi" class="modal">
+    <button class="close-btn" onclick="closeModal('modalBuzdolabi')">X</button>
+    <h2>❄️ Buzdolabı Envanteri</h2>
+    <input type="text" id="buzdolabiInput" placeholder="Buzdolabına ürün ekle...">
+    <button class="btn" onclick="addBuzdolabiItem()">➕ Ekle</button>
+    <ul id="buzdolabiListEl"></ul>
+</div>
+
+<div id="modalBuzluk" class="modal">
+    <button class="close-btn" onclick="closeModal('modalBuzluk')">X</button>
+    <h2>🧊 Buzluk / Derin Dondurucu</h2>
+    <input type="text" id="buzlukInput" placeholder="Buzluğa ürün ekle...">
+    <button class="btn" style="background:#2980b9;" onclick="addBuzlukItem()">➕ Ekle</button>
+    <ul id="buzlukListEl"></ul>
+</div>
+
+<div id="modalKiler" class="modal">
+    <button class="close-btn" onclick="closeModal('modalKiler')">X</button>
+    <h2>🪵 Kiler Dolabı</h2>
+    <input type="text" id="kilerInput" placeholder="Kilere ürün ekle...">
+    <button class="btn" style="background:#b33939;" onclick="addKilerItem()">➕ Ekle</button>
+    <ul id="kilerListEl"></ul>
+</div>
+
+<div id="modalBulasik" class="modal">
+    <button class="close-btn" onclick="closeModal('modalBulasik')">X</button>
+    <h2>🍽️ Bulaşık Makinesi</h2>
+    <div style="background:#e8f8f5; padding:10px; border-radius:6px; text-align:center; margin-bottom:10px;">
+        <div id="timerDisplay" style="font-size:22px; font-weight:bold; color:#16a085;">00:00:00</div>
+        <select id="washDuration">
+            <option value="1">Hızlı Yıkama (1 Dakika)</option>
+            <option value="30">Normal Program (30 Dakika)</option>
+        </select>
+        <button class="btn" style="background:#1abc9c;" onclick="startDishwasher()">🚀 Çalıştır</button>
+    </div>
+    <input type="text" id="bulasikInput" placeholder="Eşya ekle (Örn: Tabaklar)...">
+    <button class="btn" style="background:#16a085;" onclick="addBulasikItem()">➕ Ekle</button>
+    <ul id="bulasikListEl"></ul>
+</div>
+
+<script>
+    let scene, camera, renderer, controls;
+    let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+    let prevTime = performance.now();
+    let velocity = new THREE.Vector3();
+    let direction = new THREE.Vector3();
+
+    let interactiveObjects = [];
+    let raycaster = new THREE.Raycaster();
+    
+    // Eşya Taşıma Değişkenleri
+    let selectedObject = null;
+    let plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0); // Zemin düzlemi
+    let intersectionPoint = new THREE.Vector3();
+    let mouse = new THREE.Vector2();
+
+    let buzdolabiList = ["Süt", "Yumurta", "Domates"];
+    let buzlukList = ["Kırmızı Et", "Tavuk Göğsü"];
+    let kilerList = ["Un", "Tuz", "Şeker"];
+    let bulasikList = ["Bardaklar", "Tabaklar"];
+    let countdownInterval = null;
+
+    init();
+    animate();
+
+    function init() {
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x2c3e50);
+        scene.fog = new THREE.Fog(0x2c3e50, 15, 50);
+
+        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 1.8, 6);
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
+        scene.add(ambientLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
+        dirLight.position.set(5, 15, 5);
+        scene.add(dirLight);
+
+        // Zemin
+        const floorGeo = new THREE.PlaneGeometry(30, 30);
+        const floorMat = new THREE.MeshStandardMaterial({ color: 0x95a5a6, roughness: 0.6 });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        scene.add(floor);
+
+        controls = new THREE.PointerLockControls(camera, document.body);
+
+        const instructions = document.getElementById('instructions');
+        instructions.addEventListener('click', () => { 
+            if (!selectedObject) controls.lock(); 
+        });
+
+        controls.addEventListener('lock', () => { instructions.style.display = 'none'; });
+        controls.addEventListener('unlock', () => { if(!isAnyModalOpen() && !selectedObject) instructions.style.display = 'flex'; });
+        scene.add(controls.getObject());
+
+        const onKeyDown = function (event) {
+            if (selectedObject) {
+                // Eşya tutulurken R ve F ile yukarı kaldır / aşağı indir
+                if (event.code === 'KeyR') selectedObject.position.y += 0.1;
+                if (event.code === 'KeyF') selectedObject.position.y = Math.max(0, selectedObject.position.y - 0.1);
+                return;
+            }
+
+            switch (event.code) {
+                case 'KeyW': case 'ArrowUp': moveForward = true; break;
+                case 'KeyA': case 'ArrowLeft': moveLeft = true; break;
+                case 'KeyS': case 'ArrowDown': moveBackward = true; break;
+                case 'KeyD': case 'ArrowRight': moveRight = true; break;
+            }
+        };
+
+        const onKeyUp = function (event) {
+            if (selectedObject) return;
+            switch (event.code) {
+                case 'KeyW': case 'ArrowUp': moveForward = false; break;
+                case 'KeyA': case 'ArrowLeft': moveLeft = false; break;
+                case 'KeyS': case 'ArrowDown': moveBackward = false; break;
+                case 'KeyD': case 'ArrowRight': moveRight = false; break;
+            }
+        };
+
+        document.addEventListener('keydown', onKeyDown);
+        document.addEventListener('keyup', onKeyUp);
+        
+        // Fare Tıklama Olayları (Sol tık: Envanter, Sağ tık: Eşya Taşıma)
+        window.addEventListener('mousedown', onMouseDown);
+        window.addEventListener('mousemove', onMouseMove);
+
+        const loader = new THREE.GLTFLoader();
+
+        function loadAssetModel(possiblePaths, position, targetHeight, objectType, rotationY = 0) {
+            let pathIndex = 0;
+
+            function tryNextPath() {
+                if (pathIndex >= possiblePaths.length) return;
+                let currentPath = possiblePaths[pathIndex++];
+                
+                loader.load(currentPath, (gltf) => {
+                    const model = gltf.scene;
+                    const box = new THREE.Box3().setFromObject(model);
+                    const size = box.getSize(new THREE.Vector3());
+                    if (size.y > 0 && targetHeight > 0) {
+                        const scaleFactor = targetHeight / size.y;
+                        model.scale.set(scaleFactor, scaleFactor, scaleFactor);
+                    }
+
+                    model.position.copy(position);
+                    model.rotation.y = rotationY;
+                    if(objectType) model.userData = { type: objectType };
+                    
+                    scene.add(model);
+                    if(objectType) interactiveObjects.push(model);
+                }, undefined, () => {
+                    tryNextPath();
+                });
+            }
+
+            tryNextPath();
+        }
+
+        // --- NİZAMİ VE DÜZGÜN YERLEŞİM ---
+        
+        // Paspas (Ortada)
+        const rugGeo = new THREE.PlaneGeometry(2.5, 1.8);
+        const rugMat = new THREE.MeshStandardMaterial({ color: 0x8e44ad, roughness: 0.9 });
+        const rugMesh = new THREE.Mesh(rugGeo, rugMat);
+        rugMesh.rotation.x = -Math.PI / 2;
+        rugMesh.position.set(0, 0.01, 1.0);
+        scene.add(rugMesh);
+
+        // Mutfak Eşyaları (Yan yana, düzenli)
+        loadAssetModel(['assets/fridge.glb', 'fridge.glb'], new THREE.Vector3(-3.5, 0, -5), 2.2, 'buzdolabi', 0);
+        loadAssetModel(['assets/dishwasher.glb', 'dishwasher.glb'], new THREE.Vector3(-1.5, 0, -5), 1.2, 'bulasik', 0);
+        loadAssetModel(['assets/kitchen_cabinets.glb', 'kitchen_cabinets.glb', 'assets/kitchen_cabinet.glb'], new THREE.Vector3(0.8, 0, -5), 2.1, 'kiler', 0);
+        loadAssetModel(['assets/chest freezer.glb', 'assets/chest_freezer.glb', 'chest freezer.glb', 'chest_freezer.glb'], new THREE.Vector3(3.0, 0, -5), 1.2, 'buzluk', 0);
+
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        window.addEventListener('resize', onWindowResize);
+    }
+
+    function onMouseDown(event) {
+        // Sağ Tık (button === 2): Eşya Tut / Bırak
+        if (event.button === 2) {
+            event.preventDefault();
+            
+            if (selectedObject) {
+                // Eşyayı bırak
+                selectedObject = null;
+                controls.enabled = true;
+                if (!controls.isLocked) controls.lock();
+            } else {
+                // Eşya seçmeye çalış
+                raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+                const intersects = raycaster.intersectObjects(interactiveObjects, true);
+
+                if (intersects.length > 0) {
+                    let obj = intersects[0].object;
+                    while (obj.parent && !obj.userData.type) {
+                        obj = obj.parent;
+                    }
+                    if (obj.userData.type) {
+                        selectedObject = obj;
+                        controls.unlock(); // Kamerayı serbest bırak ki rahat taşıyalım
+                        controls.enabled = false;
+                    }
+                }
+            }
+        }
+
+        // Sol Tık (button === 0): Envanter Aç
+        if (event.button === 0 && !selectedObject && controls.isLocked) {
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+            const intersects = raycaster.intersectObjects(interactiveObjects, true);
+
+            if (intersects.length > 0) {
+                let obj = intersects[0].object;
+                while (obj.parent && !obj.userData.type) {
+                    obj = obj.parent;
+                }
+
+                const type = obj.userData.type;
+                if (type === 'buzdolabi') openModal('modalBuzdolabi');
+                else if (type === 'buzluk') openModal('modalBuzluk');
+                else if (type === 'kiler') openModal('modalKiler');
+                else if (type === 'bulasik') openModal('modalBulasik');
+            }
+        }
+    }
+
+    function onMouseMove(event) {
+        if (!selectedObject) return;
+
+        // Fare hareketine göre tutulan eşyayı zeminde sürüklüyoruz
+        raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+        raycaster.ray.intersectPlane(plane, intersectionPoint);
+        
+        if (intersectionPoint) {
+            selectedObject.position.x = intersectionPoint.x;
+            selectedObject.position.z = intersectionPoint.z;
+        }
+    }
+
+    // Sağ tık menüsünün açılmasını engelle ki oyun rahat oynansın
+    window.addEventListener('contextmenu', event => event.preventDefault());
+
+    function openModal(modalId) {
+        controls.unlock();
+        document.getElementById(modalId).style.display = 'block';
+        if(modalId === 'modalBuzdolabi') renderBuzdolabi();
+        if(modalId === 'modalBuzluk') renderBuzluk();
+        if(modalId === 'modalKiler') renderKiler();
+        if(modalId === 'modalBulasik') renderBulasik();
+    }
+
+    function closeModal(modalId) {
+        document.getElementById(modalId).style.display = 'none';
+        if (!selectedObject) controls.lock();
+    }
+
+    function isAnyModalOpen() {
+        return document.getElementById('modalBuzdolabi').style.display === 'block' ||
+               document.getElementById('modalBuzluk').style.display === 'block' ||
+               document.getElementById('modalKiler').style.display === 'block' ||
+               document.getElementById('modalBulasik').style.display === 'block';
+    }
+
+    function animate() {
+        requestAnimationFrame(animate);
+
+        const time = performance.now();
+        if (controls.isLocked) {
+            const delta = (time - prevTime) / 1000;
+
+            velocity.x -= velocity.x * 10.0 * delta;
+            velocity.z -= velocity.z * 10.0 * delta;
+
+            direction.z = Number(moveForward) - Number(moveBackward);
+            direction.x = Number(moveRight) - Number(moveLeft);
+            direction.normalize();
+
+            if (moveForward || moveBackward) velocity.z -= direction.z * 30.0 * delta;
+            if (moveLeft || moveRight) velocity.x -= direction.x * 30.0 * delta;
+
+            controls.moveRight(-velocity.x * delta);
+            controls.moveForward(-velocity.z * delta);
+        }
+        prevTime = time;
+        renderer.render(scene, camera);
+    }
+
+    function onWindowResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function renderBuzdolabi() {
+        let el = document.getElementById('buzdolabiListEl'); el.innerHTML = '';
+        buzdolabiList.forEach((item, i) => { el.innerHTML += `<li>❄️ ${item} <button style="background:#e74c3c; color:white; border:none; padding:4px 8px; border-radius:4px;" onclick="buzdolabiList.splice(${i},1);renderBuzdolabi();">Sil</button></li>`; });
+    }
+    function addBuzdolabiItem() {
+        let v = document.getElementById('buzdolabiInput').value.trim();
+        if(v) { buzdolabiList.push(v); document.getElementById('buzdolabiInput').value=''; renderBuzdolabi(); }
+    }
+
+    function renderBuzluk() {
+        let el = document.getElementById('buzlukListEl'); el.innerHTML = '';
+        buzlukList.forEach((item, i) => { el.innerHTML += `<li>🧊 ${item} <button style="background:#e74c3c; color:white; border:none; padding:4px 8px; border-radius:4px;" onclick="buzlukList.splice(${i},1);renderBuzluk();">Sil</button></li>`; });
+    }
+    function addBuzlukItem() {
+        let v = document.getElementById('buzlukInput').value.trim();
+        if(v) { buzlukList.push(v); document.getElementById('buzlukInput').value=''; renderBuzluk(); }
+    }
+
+    function renderKiler() {
+        let el = document.getElementById('kilerListEl'); el.innerHTML = '';
+        kilerList.forEach((item, i) => { el.innerHTML += `<li>🪵 ${item} <button style="background:#e74c3c; color:white; border:none; padding:4px 8px; border-radius:4px;" onclick="kilerList.splice(${i},1);renderKiler();">Sil</button></li>`; });
+    }
+    function addKilerItem() {
+        let v = document.getElementById('kilerInput').value.trim();
+        if(v) { kilerList.push(v); document.getElementById('kilerInput').value=''; renderKiler(); }
+    }
+
+    function renderBulasik() {
+        let el = document.getElementById('bulasikListEl'); el.innerHTML = '';
+        bulasikList.forEach((item, i) => { el.innerHTML += `<li>🍽️ ${item} <button style="background:#e74c3c; color:white; border:none; padding:4px 8px; border-radius:4px;" onclick="bulasikList.splice(${i},1);renderBulasik();">Sil</button></li>`; });
+    }
+    function addBulasikItem() {
+        let v = document.getElementById('bulasikInput').value.trim();
+        if(v) { bulasikList.push(v); document.getElementById('bulasikInput').value=''; renderBulasik(); }
+    }
+
+    function startDishwasher() {
+        if(countdownInterval) clearInterval(countdownInterval);
+        let minutes = parseInt(document.getElementById("washDuration").value);
+        let totalSeconds = minutes * 60;
+        function updateTimer() {
+            let h = Math.floor(totalSeconds / 3600), m = Math.floor((totalSeconds % 3600) / 60), s = totalSeconds % 60;
+            document.getElementById("timerDisplay").innerText = (h<10?"0"+h:h)+":"+(m<10?"0"+m:m)+":"+(s<10?"0"+s:s);
+            if (totalSeconds <= 0) {
+                clearInterval(countdownInterval);
+                document.getElementById("timerDisplay").innerText = "00:00:00";
+                alert("🎉 Bulaşıklar bitti!");
+            }
+            totalSeconds--;
+        }
+        updateTimer();
+        countdownInterval = setInterval(updateTimer, 1000);
+        alert("Bulaşık makinesi çalıştırıldı!");
+    }
+</script>
+
+</body>
+</html>
